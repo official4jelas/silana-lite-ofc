@@ -34,4 +34,5 @@ let handler = async (m, {conn, text}) => {
 handler.help = ['gemini']
 handler.command = ['gemini']
 handler.tags = ['ai']
+handler.limit = true
 export default handler;

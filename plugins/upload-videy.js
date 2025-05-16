@@ -21,9 +21,9 @@ let handler = async (m, { conn }) => {
 };
 
 handler.help = ["upload-videy"];
-handler.tags = ["tools"];
+handler.tags = ["uploader"];
 handler.command = /^upload-videy$/i;
-
+handler.limit = true;
 export default handler;
 
 async function uploadVidey(fileBuffer, fileName) {

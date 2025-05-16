@@ -1,127 +1,99 @@
-import axios from 'axios';
-import baileys from '@adiwajshing/baileys';
+//follow my channel https://whatsapp.com/channel/0029VaX4b6J7DAWqt3Hhu01A
 
-const { proto, generateWAMessageFromContent, prepareWAMessageMedia } = baileys;
+let handler = async (m, { conn, usedPrefix, command, text }) => {
+  if (!text)
+    return m.reply(
+      `Enter the apk name \n\nExample : \n${usedPrefix + command} facebook lite \n\n\n المرجو كتابة الامر متبوع باسم التطبيق الذي تريد تحميله`,
+    );
 
-async function response(jid, data, quoted) {
-    let msg = generateWAMessageFromContent(jid, {
-        viewOnceMessage: {
-            message: {
-                "messageContextInfo": { "deviceListMetadata": {}, "deviceListMetadataVersion": 2 },
-                interactiveMessage: proto.Message.InteractiveMessage.create({
-                    body: proto.Message.InteractiveMessage.Body.create({ text: data.body }),
-                    footer: proto.Message.InteractiveMessage.Footer.create({ text: data.footer }),
-                    header: proto.Message.InteractiveMessage.Header.create({
-                        title: data.title,
-                        subtitle: data.subtitle,
-                        hasMediaAttachment: data.media ? true : false,
-                        ...(data.media ? await prepareWAMessageMedia(data.media, { upload: conn.waUploadToServer }) : {})
-                    }),
-                    nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({ buttons: data.buttons })
-                })
-            }
-        }
-    }, { quoted });
+  conn.apk = conn.apk ? conn.apk : {};
 
-    await conn.relayMessage(msg.key.remoteJid, msg.message, { messageId: msg.key.id });
-}
+  if (text.split("").length <= 2 && !isNaN(text) && m.sender in conn.apk) {
+    text = text.replace(/http:\/\/|https:\/\//i, "");
+    let dt = conn.apk[m.sender];
+    if (dt.download) return m.reply("You're still downloading!");
+    try {
+      dt.download = true;
+      let data = await aptoide.download(dt.data[text - 1].id);
+      let caption = `
+Name : ${data.appname}
+Developer : ${data.developer}
+`.trim();
 
-let handler = async (m, { conn, command, usedPrefix, text }) => {
-    if (command === "apk") {
-        if (!text) throw `📝 *اكتب اسم التطبيق الذي تريد البحث عنه*:\n\nمثال: ${usedPrefix + command} whatsapp`;
+      await conn.sendMessage(m.chat, {
+        image: { url: data.img },
+        caption: caption,
+      }, { quoted: m });
 
-        try {
-            const { data } = await axios.get(`https://api-log-ten.vercel.app/api/download/aptoide?q=${encodeURIComponent(text)}`);
-            if (!data.results.length) throw `❌ لم يتم العثور على أي تطبيق تحت الاسم: "${text}".`;
-
-            let sections = [{
-                title: '📱 التطبيقات المتوفرة',
-                rows: data.results.map(app => ({
-                    title: app.name,
-                    description: `📂 حجم: ${app.size} | 🕒 آخر تحديث: ${app.lastup}`,
-                    id: `.apkview ${app.packageId}`
-                }))
-            }];
-
-            const listMessage = {
-                text: `🔎 *نتائج البحث عن* "${text}":`,
-                footer: 'اختر تطبيقًا لعرض التفاصيل 📥',
-                body: '🔽 الرجاء اختيار التطبيق الذي تريد تحميله:',
-                buttons: [{
-                    name: 'single_select',
-                    buttonParamsJson: JSON.stringify({ title: 'نتائج البحث', sections })
-                }]
-            };
-
-            await response(m.chat, listMessage, m);
-        } catch (error) {
-            if (error.response?.status === 504) {
-                await conn.sendMessage(m.chat, { text: "⚠️ *الخادم لم يستجب في الوقت المحدد.*\n🔄 الرجاء إعادة المحاولة بعد قليل." }, { quoted: m });
-            } else {
-                throw `❌ حدث خطأ أثناء البحث عن التطبيق.`;
-            }
-        }
-    } else if (command === "apkview") {
-        if (!text) throw `❓ *طريقة الاستخدام*:\n${usedPrefix + command} <app packageId>`;
-
-        try {
-            const { data } = await axios.get(`https://api-log-ten.vercel.app/api/download/aptoide?q=${encodeURIComponent(text)}`);
-            const app = data.results.find(a => a.packageId === text);
-            if (!app) throw `❌ التطبيق غير موجود!`;
-
-            const details = `📌 *${app.name}*\n📦 *Package ID:* ${app.packageId}\n🕒 *آخر تحديث:* ${app.lastup}\n📂 *الحجم:* ${app.size}\n\n👇 *تحميل التطبيق من هنا:*`;
-
-            const buttons = [{
-                name: 'quick_reply',
-                buttonParamsJson: JSON.stringify({
-                    display_text: "تحميل التطبيق الآن",
-                    id: ".apkget " + app.packageId
-                })
-            }];
-
-            const buttonMessage = {
-                body: details,
-                footer: 'تحميل التطبيقات من Aptoide',
-                buttons,
-                media: { image: { url: app.icon } }
-            };
-
-            await response(m.chat, buttonMessage, m);
-        } catch (error) {
-            if (error.response?.status === 504) {
-                await conn.sendMessage(m.chat, { text: "⚠️ *الخادم لم يستجب في الوقت المحدد.*\n🔄 الرجاء إعادة المحاولة بعد قليل." }, { quoted: m });
-            } else {
-                throw `❌ حدث خطأ أثناء عرض تفاصيل التطبيق.`;
-            }
-        }
-    } else if (command === "apkget") {
-        if (!text) throw `❓ *طريقة الاستخدام*:\n${usedPrefix + command} <packageId>`;
-
-        try {
-            const { data } = await axios.get(`https://api-log-ten.vercel.app/api/download/aptoide?q=${encodeURIComponent(text)}`);
-            const app = data.results.find(a => a.packageId === text);
-            if (!app) throw `❌ التطبيق غير موجود!`;
-
-            await conn.sendMessage(m.chat, {
-                document: { url: app.dllink },
-                mimetype: 'application/vnd.android.package-archive',
-                fileName: `${app.name}.apk`,
-                caption: `✅ *تم تحميل التطبيق بنجاح!*\n📦 *${app.name}*`,
-                contextInfo: { mentionedJid: [m.sender] }
-            }, { quoted: m });
-        } catch (error) {
-            if (error.response?.status === 504) {
-                await conn.sendMessage(m.chat, { text: "⚠️ *الخادم لم يستجب في الوقت المحدد.*\n🔄 الرجاء إعادة المحاولة بعد قليل." }, { quoted: m });
-            } else {
-                throw `❌ حدث خطأ أثناء تحميل التطبيق.`;
-            }
-        }
+      let dl = await conn.getFile(data.link);
+      conn.sendMessage(
+        m.chat,
+        { document: dl.data, fileName: data.appname, mimetype: dl.mime },
+        { quoted: m },
+      );
+    } catch (e) {
+      throw e;
+    } finally {
+      dt.download = false;
     }
+  } else {
+    let data = await aptoide.search(text);
+    let caption = data
+      .map((v, i) => {
+        return `
+${i + 1}. ${v.name}
+• Size : ${v.size}
+• Version : ${v.version}
+• Download : ${v.download}
+• Id : ${v.id}
+`.trim();
+      })
+      .join("\n\n");
+    let header = `_Please download by typing, *${usedPrefix + command} 1*_\n\n\n قم بالاشارة لهذه الرسالة و الرد بكتابة الامر متبوع برقم التطبيق الذي تود تحميله مثال : \n\n *.apk 1* \n\n`;
+    m.reply(header + caption);
+    conn.apk[m.sender] = {
+      download: false,
+      data: data,
+      time: setTimeout(() => {
+        delete conn.apk[m.sender];
+      }, 3600000),
+    };
+  }
 };
-
-handler.command = ["apk", "apkview", "apkget"];
 handler.help = ["apk"];
 handler.tags = ["downloader"];
-handler.limit = true;
-
+handler.command = /^(apk)$/i;
+handler.limit = true 
 export default handler;
+
+const aptoide = {
+  search: async function (args) {
+    let res = await global.fetch(
+      `https://ws75.aptoide.com/api/7/apps/search?query=${args}&limit=1000`,
+    );
+    let ress = {};
+    res = await res.json();
+    ress = res.datalist.list.map((v) => {
+      return {
+        name: v.name,
+        size: v.size,
+        version: v.file.vername,
+        id: v.package,
+        download: v.stats.downloads,
+      };
+    });
+    return ress;
+  },
+  download: async function (id) {
+    let res = await global.fetch(
+      `https://ws75.aptoide.com/api/7/apps/search?query=${id}&limit=1`,
+    );
+    res = await res.json();
+    return {
+      img: res.datalist.list[0].icon,
+      developer: res.datalist.list[0].store.name,
+      appname: res.datalist.list[0].name,
+      link: res.datalist.list[0].file.path,
+    };
+  },
+};

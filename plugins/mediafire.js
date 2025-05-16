@@ -1,31 +1,22 @@
-import fetch from 'node-fetch';
+import axios from 'axios';
 
-let handler = async (m, { conn, text }) => {
-    if (!text) return m.reply('Please provide a MediaFire link!');
-
+let handler = async (m, {conn, text}) => {
+    if (!text) return m.reply('من فضلك أدخل رابط');
+    if (!text.includes('http')) return m.reply('من فضلك أدخل رابط صحيح');
+    
     try {
-        const response = await fetch(`https://api.agatz.xyz/api/mediafire?url=${text}`);
-        const result = await response.json();
-
-        if (result.status === 200) {
-            const file = result.data[0];
-            const mime = file.mime;
-
-            let caption = `*File Name:* ${file.nama}\n*Size:* ${file.size}\n\nDownloading...`;
-
-            await conn.sendMessage(m.chat, { text: caption }, m);
-            await conn.sendMessage(m.chat, { document: { url: file.link }, mimetype: mime, fileName: file.nama }, m);
-        } else {
-            m.reply('Failed to fetch the MediaFire link. Please try again.');
-        }
+        const resmf = await axios.get('https://api.siputzx.my.id/api/d/mediafire?url=' + encodeURIComponent(text));
+        m.reply('بدء التنزيل...');
+        conn.sendFile(m.chat, resmf.data.data.downloadLink, resmf.data.data.downloadLink.split('/').pop(),
+            `الاسم: ${resmf.data.data.fileName}
+            الحجم: ${resmf.data.data.fileSize}
+            النوع: ${resmf.data.data.downloadLink.split('.').pop()}`, m);
     } catch (error) {
-        console.error(error);
-        m.reply('An error occurred while fetching the download link.');
+        m.reply('حدث خطأ أثناء المعالجة');
     }
-};
+}
 
-handler.help = ['mediafire'];
-handler.tags = ['downloader'];
-handler.command = /^(md|mediafire)$/i;
-
+handler.help = handler.command = ['mediafire']
+handler.tags = ['downloader']
+handler.limit = true 
 export default handler;

@@ -1,59 +1,79 @@
-import { createReadStream, unlinkSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { Buffer } from 'buffer';
-import fetch from 'node-fetch'; // Ensure you have node-fetch installed
+import axios from 'axios';
 
-async function Upscale(imageBuffer) {
-    try {
-        const response = await fetch("https://lexica.qewertyy.dev/upscale", {
-            body: JSON.stringify({
-                image_data: Buffer.from(imageBuffer, "base64"),
-                format: "binary",
-            }),
-            headers: {
-                "Content-Type": "application/json",
-            },
-            method: "POST",
-        });
-        return Buffer.from(await response.arrayBuffer());
-    } catch {
-        return null;
+function randomNumber() {
+  let randomNumber = Math.floor(Math.random() * 1000000);
+  return randomNumber.toString().padStart(6, '0');
+}
+
+async function upscale(buffer) {
+  const blob = new Blob([buffer], { type: 'image/png' });
+  let filename = randomNumber() + '.png';
+  let formData = new FormData();
+  formData.append('image', {});
+  formData.append('image', blob, filename);
+
+  let { data } = await axios.post('https://api.imggen.ai/guest-upload', formData, {
+    headers: {
+      "content-type": "multipart/form-data",
+      origin: "https://imggen.ai",
+      referer: "https://imggen.ai/",
+      "user-agent": "Mozilla/5.0"
     }
+  });
+
+  let result = await axios.post('https://api.imggen.ai/guest-upscale-image', {
+    image: {
+      "url": "https://api.imggen.ai" + data.image.url,
+      "name": data.image.name,
+      "original_name": data.image.original_name,
+      "folder_name": data.image.folder_name,
+      "extname": data.image.extname
+    }
+  }, {
+    headers: {
+      "content-type": "application/json",
+      origin: "https://imggen.ai",
+      referer: "https://imggen.ai/",
+      "user-agent": "Mozilla/5.0"
+    }
+  });
+
+  return `https://api.imggen.ai${result.data.upscaled_image}`;
 }
 
 let handler = async (m, { conn }) => {
-    // Check if the message contains an image
-    if (!m.quoted || !m.quoted.mimetype || !m.quoted.mimetype.startsWith('image')) {
-        return m.reply('Please reply to an image with the command to upscale it.');
+  try {
+    await m.react('⌛');
+
+    let q = m.quoted ? m.quoted : m;
+    let mime = (q.msg || q).mimetype || '';
+    
+    if (!mime.startsWith('image/')) {
+      throw 'Please send an image with caption *hd/remini* or reply to an image!';
     }
 
-    // Download the image
-    const media = await m.quoted.download();
-    const imageBuffer = media.toString('base64');
+    let media = await q.download();
+    if (!media) throw 'Failed to download image.';
 
-    // Upscale the image
-    const upscaledImageBuffer = await Upscale(imageBuffer);
+    let upscaledUrl = await upscale(media);
+    if (!upscaledUrl) throw 'Failed to upscale image.';
 
-    if (!upscaledImageBuffer) {
-        return m.reply('Failed to upscale the image.');
-    }
+    await m.react('✅');
 
-    // Save the upscaled image to a temporary file
-    const tempFilePath = join(tmpdir(), 'upscaled_image.png');
-    await writeFile(tempFilePath, upscaledImageBuffer);
+    await conn.sendMessage(m.chat, {
+      image: { url: upscaledUrl },
+      caption: `*Done*`
+    }, { quoted: m });
 
-    // Send the upscaled image
-    await conn.sendFile(m.chat, tempFilePath, 'upscaled_image.png', 'Here is your HD image: by silana lite ai', m);
+  } catch (error) {
+    await m.react('❌');
+    await conn.reply(m.chat, `❌ *Error:* ${error.message || error}`, m);
+  }
+};
 
-    // Clean up the temporary file
-    unlinkSync(tempFilePath);
-}
+handler.help = ['remini', 'hd'];
+handler.tags = ['tools'];
+handler.command = /^(remini|hd)$/i;
+handler.limit = true;
 
-handler.help = handler.command = ['remini','hd']
-handler.tags = ['tools']
-handler.limit = true
-export default handler
-
-// Helper function to write files using promises
-import { writeFile } from 'fs/promises';
+export default handler;

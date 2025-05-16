@@ -1,5 +1,6 @@
 import axios from "axios";
 import cheerio from "cheerio";
+const { generateWAMessageContent, generateWAMessageFromContent, proto } = (await import('@adiwajshing/baileys')).default;
 
 const base = "https://www.pinterest.com";
 const search = "/resource/BaseSearchResource/get/";
@@ -77,23 +78,95 @@ async function searchPinterest(query) {
     }
 }
 
-let handler = async (m, { conn, text }) => {
+let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (!text) {
-        return conn.reply(m.chat, "❌ *يرجى إدخال كلمة بحث!*\nمثال: .pinterest قطة", m);
+        return m.reply(`• *مثال:*\n ${usedPrefix + command} cat`);
+    }
+
+    await m.reply('*_`جاري التحميل`_*');
+
+    async function createImage(url) {
+        const { imageMessage } = await generateWAMessageContent({
+            image: { url }
+        }, {
+            upload: conn.waUploadToServer
+        });
+        return imageMessage;
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
     }
 
     let result = await searchPinterest(text);
     if (!result.status) {
-        return conn.reply(m.chat, `⚠️ ${result.message}`, m);
+        return m.reply(`⚠️ ${result.message}`);
     }
 
-    for (let pin of result.pins) {
-        await conn.sendMessage(m.chat, { image: { url: pin.image }, caption: `📌 *${pin.title}*\n🔗 رابط: ${pin.pin_url}\n👤 الناشر: ${pin.uploader.full_name} (@${pin.uploader.username})` }, { quoted: m });
+    let pins = result.pins.slice(0, 10); // نأخذ أول 10 نتائج كحد أقصى
+    shuffleArray(pins); // ترتيب عشوائي للنتائج
+
+    let push = [];
+    let i = 1;
+    for (let pin of pins) {
+        let imageUrl = pin.image;
+        push.push({
+            body: proto.Message.InteractiveMessage.Body.fromObject({
+                text: `📌 *العنوان:* ${pin.title}\n📝 *الوصف:* ${pin.description}\n👤 *الناشر:* ${pin.uploader.full_name} (@${pin.uploader.username})\n🔗 *الرابط:* ${pin.pin_url}`
+            }),
+            footer: proto.Message.InteractiveMessage.Footer.fromObject({
+                text: '乂 SILANA AI 🧠' // تخصيص العلامة المائية
+            }),
+            header: proto.Message.InteractiveMessage.Header.fromObject({
+                title: `الصورة ${i++}`,
+                hasMediaAttachment: true,
+                imageMessage: await createImage(imageUrl) // صورة البنترست
+            }),
+            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                buttons: [
+                    {
+                        "name": "cta_url",
+                        "buttonParamsJson": `{"display_text":"عرض على Pinterest","url":"${pin.pin_url}"}`
+                    }
+                ]
+            })
+        });
     }
+
+    const bot = generateWAMessageFromContent(m.chat, {
+        viewOnceMessage: {
+            message: {
+                messageContextInfo: {
+                    deviceListMetadata: {},
+                    deviceListMetadataVersion: 2
+                },
+                interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                    body: proto.Message.InteractiveMessage.Body.create({
+                        text: "اكتملت نتائج البحث..."
+                    }),
+                    footer: proto.Message.InteractiveMessage.Footer.create({
+                        text: '乂 SILANA AI 🧠' // تخصيص العلامة المائية
+                    }),
+                    header: proto.Message.InteractiveMessage.Header.create({
+                        hasMediaAttachment: false
+                    }),
+                    carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                        cards: [...push] // ملء الـ carousel بنتائج البحث
+                    })
+                })
+            }
+        }
+    }, {});
+
+    await conn.relayMessage(m.chat, bot.message, { messageId: bot.key.id });
 };
 
 handler.help = ['pinterest'];
 handler.tags = ['downloader'];
-handler.command = ['pinterest'];
+handler.command = /^(pinterest)$/i;
+handler.limit = true;
 
 export default handler;

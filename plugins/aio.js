@@ -2,7 +2,7 @@ import axios from "axios";
 
 let handler = async (m, { conn, args }) => {
   if (!args[0]) {
-    return m.reply("❌ يرجى إدخال رابط فيديو .");
+    return m.reply("❌  يرجى إدخال رابط فيديو من الفيسبوك او الانستغرام  بعد الامر .");
   }
 
   let url = args[0];
@@ -41,5 +41,5 @@ let handler = async (m, { conn, args }) => {
 handler.help = ["aio"];
 handler.tags = ["downloader"];
 handler.command = ["aio"];
-
+handler.limit = true
 export default handler;

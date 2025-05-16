@@ -57,5 +57,5 @@ let handler = async (m, { conn, text }) => {
 handler.help = ['whatsappgroup'];
 handler.tags = ['search'];
 handler.command = ['whatsappgroup'];
-
+handler.limit = true 
 export default handler;

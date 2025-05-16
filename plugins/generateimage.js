@@ -1,38 +1,55 @@
-import axios from 'axios'
+import axios from 'axios';
 
-let handler = async (m, { conn }) => {
-  const options = { prompt: "concept art forest, enchanted, portrait, digital artwork, illustrative, painterly, matte painting, highly detailed." }
-  
-  try {
-    // Send a reply to inform the user that the image generation is in progress
-    await m.reply("Generating your image, please wait...")
-
-    const res = await axios({
-      url: 'https://s9.piclumen.art/comfy/api/generate-image',
-      method: 'post',
-      headers: {
+const api = axios.create({
+    baseURL: 'https://luminai.my.id',
+    headers: {
         'Content-Type': 'application/json',
-        'Response-Type': 'image/jpeg',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; NX769J Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36',
-      },
-      data: {
-        prompt: options.prompt
-      },
-      responseType: 'arraybuffer'
-    });
-    
-    // Sending the image response to the user
-    if (res.data) {
-      await conn.sendMessage(m.chat, { image: res.data }, { caption: "Here is your generated image!" })
-    } else {
-      await conn.sendMessage(m.chat, { text: 'Failed to generate the image' })
+        'Accept': 'application/json',
+        'User-Agent': 'Axios-Instance/1.0',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept-Encoding': 'gzip, deflate, br',
+    },
+});
+
+/**
+ * Sends a request to generate an image based on provided content.
+ * @param {string} content - The content to use for generating the image.
+ * @returns {Promise<string>} The URL of the generated image.
+ */
+async function imageCreator(content) {
+    const payload = {
+        content,
+        cName: 'ImageGenerationLV45LJp',
+        cID: 'ImageGenerationLV45LJp',
+    };
+
+    try {
+        const response = await api.post('/', payload);
+        const urlRegex = /https:\/\/storage\.googleapis\.com\/[^\s")]+/;
+        const imageUrlMatch = urlRegex.exec(JSON.stringify(response.data.result));
+        return imageUrlMatch[0];
+    } catch (error) {
+        throw new Error(error.response ? error.response.data : error.message);
     }
-  } catch (e) {
-    await conn.sendMessage(m.chat, { text: `An error occurred: ${e.message}` })
-  }
 }
 
-handler.help = handler.command = ['generateimage']
-handler.tags = ['tools']
+let handler = async (m, { conn, text }) => {
+    if (!text) {
+        return conn.reply(m.chat, 'Please provide the content to generate an image.', m);
+    }
 
-export default handler
+    try {
+        const imageUrl = await imageCreator(text);
+        await conn.sendMessage(m.chat, { image: { url: imageUrl }, caption: `Here is your generated image for: ${text}` });
+    } catch (error) {
+        await conn.reply(m.chat, `Error: ${error.message}`, m);
+    }
+};
+
+handler.help = ['generateimage'];
+handler.command = ['generateimage'];
+handler.tags = ['ai'];
+handler.limit = true 
+export default handler;

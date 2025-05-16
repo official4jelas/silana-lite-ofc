@@ -359,7 +359,7 @@ conn.sendMessage(m.chat, {
 
 handler.help = ['menu']
 handler.command = ['menu']
-handler.register = true
+handler.register = false
 export default handler
 
 function clockString(ms) {
